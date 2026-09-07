@@ -8,7 +8,6 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
-import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
@@ -36,6 +35,11 @@ class AltinoBluetoothManager(
     companion object {
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        private val MCHP_SERVICE_UUID: UUID = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
+        private val MCHP_TX_UUID: UUID = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
+        private val MCHP_RX_UUID: UUID = UUID.fromString("49535343-8841-43f4-a8d4-ecbe34729bb3")
+
         private val NUS_RX_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
         private val NUS_TX_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
         private val HM10_UART_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
@@ -63,17 +67,14 @@ class AltinoBluetoothManager(
     @Volatile private var bleReady = false
     @Volatile private var receiveCount = 0L
 
-    fun hasConnectPermission(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+    fun hasConnectPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-    }
 
-    fun hasScanPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        }
+    fun hasScanPermission(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
     @SuppressLint("MissingPermission")
@@ -98,8 +99,7 @@ class AltinoBluetoothManager(
         }
 
         stopScan()
-        val scanner = adapter?.bluetoothLeScanner
-        if (scanner == null) {
+        val scanner = adapter?.bluetoothLeScanner ?: run {
             onState("BLE 검색을 지원하지 않는 기기입니다")
             return
         }
@@ -109,8 +109,7 @@ class AltinoBluetoothManager(
                 val d = result.device
                 val advertisedName = result.scanRecord?.deviceName.orEmpty()
                 val deviceName = runCatching { d.name.orEmpty() }.getOrDefault("")
-                val looksAltino = advertisedName.contains("ALTINO", true) || deviceName.contains("ALTINO", true)
-                if (looksAltino) {
+                if (advertisedName.contains("ALTINO", true) || deviceName.contains("ALTINO", true)) {
                     discovered[d.address] = d
                     onUpdate(sortedDevices())
                 }
@@ -130,20 +129,17 @@ class AltinoBluetoothManager(
         scope.launch {
             delay(6000)
             stopScan()
-            val count = discovered.size
-            onState(if (count > 0) "기기 검색 완료: ${count}대" else "알티노 라이트를 찾지 못했습니다")
+            onState(if (discovered.isNotEmpty()) "기기 검색 완료: ${discovered.size}대" else "알티노 라이트를 찾지 못했습니다")
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun sortedDevices(): List<BluetoothDevice> {
-        return discovered.values.sortedWith(
-            compareByDescending<BluetoothDevice> {
-                val n = runCatching { it.name.orEmpty() }.getOrDefault("")
-                n.contains("BLE", true) || it.type == BluetoothDevice.DEVICE_TYPE_LE || it.type == BluetoothDevice.DEVICE_TYPE_DUAL
-            }.thenBy { runCatching { it.name }.getOrNull() }
-        )
-    }
+    private fun sortedDevices(): List<BluetoothDevice> = discovered.values.sortedWith(
+        compareByDescending<BluetoothDevice> {
+            val n = runCatching { it.name.orEmpty() }.getOrDefault("")
+            n.contains("BLE", true) || it.type == BluetoothDevice.DEVICE_TYPE_LE || it.type == BluetoothDevice.DEVICE_TYPE_DUAL
+        }.thenBy { runCatching { it.name }.getOrNull() }
+    )
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
@@ -158,7 +154,7 @@ class AltinoBluetoothManager(
             onState("Bluetooth 연결 권한 필요")
             return
         }
-        disconnectInternal(notify = false)
+        disconnectInternal(false)
         stopScan()
 
         val name = runCatching { device.name.orEmpty() }.getOrDefault("")
@@ -166,8 +162,7 @@ class AltinoBluetoothManager(
             device.type == BluetoothDevice.DEVICE_TYPE_LE ||
             device.type == BluetoothDevice.DEVICE_TYPE_DUAL
 
-        if (preferBle && hasScanPermission()) connectBle(device)
-        else connectClassic(device)
+        if (preferBle && hasScanPermission()) connectBle(device) else connectClassic(device)
     }
 
     @SuppressLint("MissingPermission")
@@ -176,9 +171,7 @@ class AltinoBluetoothManager(
         try {
             gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-            } else {
-                device.connectGatt(context, false, gattCallback)
-            }
+            } else device.connectGatt(context, false, gattCallback)
         } catch (t: Throwable) {
             onState("BLE 연결 오류: ${t.message ?: t.javaClass.simpleName}")
             connectClassic(device)
@@ -198,8 +191,8 @@ class AltinoBluetoothManager(
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 onState("BLE 연결됨 · 통신 설정 중…")
                 negotiatedMtu = 23
-                val mtuRequested = runCatching { g.requestMtu(64) }.getOrDefault(false)
-                if (!mtuRequested) runCatching { g.discoverServices() }
+                val requested = runCatching { g.requestMtu(160) }.getOrDefault(false)
+                if (!requested) runCatching { g.discoverServices() }
                 scope.launch {
                     delay(700)
                     if (!bleReady && gatt === g) runCatching { g.discoverServices() }
@@ -227,6 +220,10 @@ class AltinoBluetoothManager(
                 return
             }
 
+            val microchipService = g.getService(MCHP_SERVICE_UUID)
+            val microchipRx = microchipService?.getCharacteristic(MCHP_RX_UUID)
+            val microchipTx = microchipService?.getCharacteristic(MCHP_TX_UUID)
+
             val chars = g.services.flatMap { it.characteristics }
             val writeCandidates = chars.filter { c ->
                 c.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0 ||
@@ -237,14 +234,17 @@ class AltinoBluetoothManager(
                     c.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
             }
 
-            val write = writeCandidates.firstOrNull { it.uuid == NUS_RX_UUID }
+            val write = microchipRx
+                ?: writeCandidates.firstOrNull { it.uuid == MCHP_RX_UUID }
+                ?: writeCandidates.firstOrNull { it.uuid == MCHP_TX_UUID }
+                ?: writeCandidates.firstOrNull { it.uuid == NUS_RX_UUID }
                 ?: writeCandidates.firstOrNull { it.uuid == HM10_UART_UUID }
-                ?: writeCandidates.firstOrNull {
-                    it.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
-                }
+                ?: writeCandidates.firstOrNull { it.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0 }
                 ?: writeCandidates.firstOrNull()
 
-            val notify = notifyCandidates.firstOrNull { it.uuid == NUS_TX_UUID }
+            val notify = microchipTx
+                ?: notifyCandidates.firstOrNull { it.uuid == MCHP_TX_UUID }
+                ?: notifyCandidates.firstOrNull { it.uuid == NUS_TX_UUID }
                 ?: notifyCandidates.firstOrNull { it.uuid == HM10_UART_UUID }
                 ?: notifyCandidates.firstOrNull()
 
@@ -259,31 +259,27 @@ class AltinoBluetoothManager(
 
             if (notify != null) enableNotifications(g, notify)
 
-            onState("ALTINO LITE BLE 통신 준비 완료 · MTU $negotiatedMtu")
-            scope.launch {
-                delay(150)
-                repeat(3) {
-                    send(AltinoPacket.drive(0, 0, 0, led = 0x01))
-                    delay(70)
-                }
-                repeat(3) {
-                    send(AltinoPacket.drive(0, 0, 0, led = 0x00))
-                    delay(70)
-                }
+            val mode = when (write.uuid) {
+                MCHP_RX_UUID -> "Microchip UART-RX"
+                MCHP_TX_UUID -> "Microchip UART-TX"
+                NUS_RX_UUID -> "Nordic UART"
+                HM10_UART_UUID -> "HM-10 UART"
+                else -> "자동선택"
             }
+            onState("통신 준비 완료 · MTU $negotiatedMtu · $mode\nTX→ ${write.uuid}")
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             receiveCount += characteristic.value?.size ?: 0
-            if (receiveCount % 220L < 22L) {
-                onState("ALTINO LITE BLE 통신 중 · 수신 ${receiveCount}B")
-            }
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             receiveCount += value.size
-            if (receiveCount % 220L < 22L) {
-                onState("ALTINO LITE BLE 통신 중 · 수신 ${receiveCount}B")
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                onState("BLE 쓰기 실패($status) · ${characteristic.uuid}")
             }
         }
     }
@@ -314,7 +310,7 @@ class AltinoBluetoothManager(
     private fun connectClassic(device: BluetoothDevice) {
         connectJob = scope.launch {
             try {
-                val deviceLabel = runCatching { device.name ?: device.address }.getOrDefault("ALTINO LITE")
+                val label = runCatching { device.name ?: device.address }.getOrDefault("ALTINO LITE")
                 onState("Classic 연결 중…")
                 var lastError: Throwable? = null
                 val candidates: List<() -> BluetoothSocket> = listOf(
@@ -327,7 +323,7 @@ class AltinoBluetoothManager(
                         s.connect()
                         socket = s
                         output = s.outputStream
-                        onState("Classic SPP 연결됨: $deviceLabel")
+                        onState("Classic SPP 연결됨: $label")
                         return@launch
                     } catch (t: Throwable) {
                         lastError = t
@@ -362,16 +358,32 @@ class AltinoBluetoothManager(
     private fun sendBle(bytes: ByteArray): Boolean {
         val g = gatt ?: return false
         val c = gattWriteCharacteristic ?: return false
+        val noResponse = c.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+        val writeType = if (noResponse) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+
+        if (bytes.size <= (negotiatedMtu - 3).coerceAtLeast(20)) {
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    g.writeCharacteristic(c, bytes, writeType) == BluetoothGatt.GATT_SUCCESS
+                } else {
+                    @Suppress("DEPRECATION")
+                    run {
+                        c.writeType = writeType
+                        c.value = bytes
+                        g.writeCharacteristic(c)
+                    }
+                }
+            } catch (t: Throwable) {
+                onState("BLE 전송 오류: ${t.message ?: t.javaClass.simpleName}")
+                false
+            }
+        }
+
         val chunkSize = (negotiatedMtu - 3).coerceAtLeast(20)
         var offset = 0
         while (offset < bytes.size) {
             val end = (offset + chunkSize).coerceAtMost(bytes.size)
             val chunk = bytes.copyOfRange(offset, end)
-            val noResponse = c.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
-            val writeType = if (noResponse)
-                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-
             val ok = try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     g.writeCharacteristic(c, chunk, writeType) == BluetoothGatt.GATT_SUCCESS
@@ -383,10 +395,7 @@ class AltinoBluetoothManager(
                         g.writeCharacteristic(c)
                     }
                 }
-            } catch (t: Throwable) {
-                onState("BLE 전송 오류: ${t.message ?: t.javaClass.simpleName}")
-                false
-            }
+            } catch (_: Throwable) { false }
             if (!ok) return false
             offset = end
         }
@@ -398,9 +407,7 @@ class AltinoBluetoothManager(
         return try { socket?.isConnected == true && output != null } catch (_: Throwable) { false }
     }
 
-    fun disconnect() {
-        disconnectInternal(notify = true)
-    }
+    fun disconnect() = disconnectInternal(true)
 
     @SuppressLint("MissingPermission")
     private fun disconnectInternal(notify: Boolean) {
