@@ -10,9 +10,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.OutputStream
@@ -26,7 +28,11 @@ class AltinoBluetoothManager(
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val exceptionHandler = CoroutineExceptionHandler { _, t ->
+        closeInternal()
+        onState("Bluetooth 오류: ${t.message ?: t.javaClass.simpleName}")
+    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + exceptionHandler)
     private val adapter: BluetoothAdapter? =
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
 
@@ -42,12 +48,18 @@ class AltinoBluetoothManager(
     @SuppressLint("MissingPermission")
     fun pairedAltinoDevices(): List<BluetoothDevice> {
         if (!hasConnectPermission()) return emptyList()
-        val devices = adapter?.bondedDevices?.toList().orEmpty()
-        val altinos = devices.filter {
-            val n = it.name.orEmpty().uppercase()
-            n.contains("ALTINO") && !n.contains("BLE")
+        return try {
+            val devices = adapter?.bondedDevices?.toList().orEmpty()
+            val altinos = devices.filter {
+                val n = runCatching { it.name.orEmpty().uppercase() }.getOrDefault("")
+                n.contains("ALTINO") && !n.contains("BLE")
+            }
+            if (altinos.isNotEmpty()) altinos.sortedBy { runCatching { it.name }.getOrNull() }
+            else devices.sortedBy { runCatching { it.name }.getOrNull() }
+        } catch (t: Throwable) {
+            onState("장치 목록 오류: ${t.message ?: t.javaClass.simpleName}")
+            emptyList()
         }
-        return if (altinos.isNotEmpty()) altinos.sortedBy { it.name } else devices.sortedBy { it.name }
     }
 
     @SuppressLint("MissingPermission")
@@ -56,43 +68,52 @@ class AltinoBluetoothManager(
             onState("Bluetooth 권한 필요")
             return
         }
-        disconnect()
+
+        // Do not call BluetoothAdapter.cancelDiscovery() here.
+        // On Android 12+ it requires BLUETOOTH_SCAN and previously caused a SecurityException crash.
+        disconnectInternal(notify = false)
+
         connectJob = scope.launch {
-            adapter?.cancelDiscovery()
-            onState("${device.name ?: device.address} 연결 중…")
+            try {
+                val deviceLabel = runCatching { device.name ?: device.address }.getOrDefault("ALTINO")
+                onState("$deviceLabel 연결 중…")
 
-            var lastError: Throwable? = null
-            val candidates = listOf(
-                { device.createRfcommSocketToServiceRecord(SPP_UUID) },
-                { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) }
-            )
+                var lastError: Throwable? = null
+                val candidates: List<() -> BluetoothSocket> = listOf(
+                    { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+                    { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) }
+                )
 
-            for ((index, factory) in candidates.withIndex()) {
-                try {
-                    val s = factory()
-                    s.connect()
-                    socket = s
-                    output = s.outputStream
-                    onState("연결됨: ${device.name ?: device.address} / SPP${if (index == 0) "" else "(insecure)"}")
+                for ((index, factory) in candidates.withIndex()) {
+                    try {
+                        val s = factory()
+                        s.connect()
+                        socket = s
+                        output = s.outputStream
+                        onState("연결됨: $deviceLabel / SPP${if (index == 0) "" else "(insecure)"}")
 
-                    // Communication check: blink forward LED, then stop.
-                    repeat(3) {
-                        send(AltinoPacket.drive(0, 0, 0, led = 0x01))
-                        delay(60)
+                        // Communication check: briefly blink the forward LED.
+                        repeat(3) {
+                            send(AltinoPacket.drive(0, 0, 0, led = 0x01))
+                            delay(60)
+                        }
+                        repeat(3) {
+                            send(AltinoPacket.drive(0, 0, 0, led = 0x00))
+                            delay(60)
+                        }
+                        return@launch
+                    } catch (t: Throwable) {
+                        lastError = t
+                        closeInternal()
+                        delay(150)
                     }
-                    repeat(3) {
-                        send(AltinoPacket.drive(0, 0, 0, led = 0x00))
-                        delay(60)
-                    }
-                    return@launch
-                } catch (t: Throwable) {
-                    lastError = t
-                    closeInternal()
-                    delay(150)
                 }
-            }
 
-            onState("연결 실패: ${lastError?.message ?: "Classic SPP 장치를 선택하세요"}")
+                onState("연결 실패: ${lastError?.message ?: "Classic SPP 장치를 선택하세요"}")
+            } catch (t: Throwable) {
+                closeInternal()
+                onState("연결 오류: ${t.message ?: t.javaClass.simpleName}")
+            }
         }
     }
 
@@ -110,15 +131,24 @@ class AltinoBluetoothManager(
         }
     }
 
-    fun isConnected(): Boolean = socket?.isConnected == true && output != null
+    fun isConnected(): Boolean = try {
+        socket?.isConnected == true && output != null
+    } catch (_: Throwable) {
+        false
+    }
 
     fun disconnect() {
+        disconnectInternal(notify = true)
+    }
+
+    private fun disconnectInternal(notify: Boolean) {
         connectJob?.cancel()
+        connectJob = null
         if (isConnected()) {
             runCatching { send(AltinoPacket.drive(0, 0, 0)) }
         }
         closeInternal()
-        onState("연결 안 됨")
+        if (notify) onState("연결 안 됨")
     }
 
     @Synchronized
