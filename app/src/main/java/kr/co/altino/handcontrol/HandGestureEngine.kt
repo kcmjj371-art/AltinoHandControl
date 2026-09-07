@@ -26,19 +26,20 @@ class HandGestureEngine(context: Context) : AutoCloseable {
             )
             .setRunningMode(RunningMode.VIDEO)
             .setNumHands(1)
-            .setMinHandDetectionConfidence(0.55f)
-            .setMinHandPresenceConfidence(0.55f)
-            .setMinTrackingConfidence(0.50f)
+            .setMinHandDetectionConfidence(0.45f)
+            .setMinHandPresenceConfidence(0.45f)
+            .setMinTrackingConfidence(0.40f)
             .build()
         handLandmarker = HandLandmarker.createFromOptions(context, options)
     }
 
     fun analyze(image: ImageProxy): DriveCommand? {
         val now = android.os.SystemClock.uptimeMillis()
-        if (now - lastAnalyzeMs < 80) return null
+        if (now - lastAnalyzeMs < 70) return null
         lastAnalyzeMs = now
 
-        val bitmap = rgbaImageProxyToBitmap(image)
+        // CameraX 1.3+ 공식 변환 API 사용. 기기별 rowStride/pixelStride 차이를 CameraX가 처리한다.
+        val bitmap = image.toBitmap()
         val rotated = rotateAndMirror(bitmap, image.imageInfo.rotationDegrees.toFloat())
         if (rotated !== bitmap) bitmap.recycle()
 
@@ -73,7 +74,7 @@ class HandGestureEngine(context: Context) : AutoCloseable {
         val wrist = lm[0]
         val tipDistance = distance(wrist, lm[tip])
         val pipDistance = distance(wrist, lm[pip])
-        return angle > 155.0 && tipDistance > pipDistance * 1.08
+        return angle > 145.0 && tipDistance > pipDistance * 1.03
     }
 
     private fun angleDeg(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark): Double {
@@ -93,16 +94,11 @@ class HandGestureEngine(context: Context) : AutoCloseable {
             (a.z() - b.z()).toDouble().pow(2.0)
     )
 
-    private fun rgbaImageProxyToBitmap(image: ImageProxy): Bitmap {
-        val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
-        val buffer = image.planes[0].buffer
-        buffer.rewind()
-        bitmap.copyPixelsFromBuffer(buffer)
-        return bitmap
-    }
-
     private fun rotateAndMirror(source: Bitmap, degrees: Float): Bitmap {
-        val matrix = Matrix().apply { postRotate(degrees); postScale(-1f, 1f) }
+        val matrix = Matrix().apply {
+            postRotate(degrees)
+            postScale(-1f, 1f)
+        }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
