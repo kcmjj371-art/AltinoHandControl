@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.OutputStream
 import java.util.UUID
@@ -44,7 +45,7 @@ class AltinoBluetoothManager(
         val devices = adapter?.bondedDevices?.toList().orEmpty()
         val altinos = devices.filter {
             val n = it.name.orEmpty().uppercase()
-            n.startsWith("ALTINO-L") || n.contains("ALTINO")
+            n.contains("ALTINO") && !n.contains("BLE")
         }
         return if (altinos.isNotEmpty()) altinos.sortedBy { it.name } else devices.sortedBy { it.name }
     }
@@ -57,21 +58,41 @@ class AltinoBluetoothManager(
         }
         disconnect()
         connectJob = scope.launch {
-            try {
-                onState("${device.name ?: device.address} 연결 중…")
-                val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                s.connect()
-                socket = s
-                output = s.outputStream
-                onState("연결됨: ${device.name ?: device.address}")
-                repeat(2) {
-                    send(AltinoPacket.drive(0, 0, 0))
-                    Thread.sleep(50)
+            adapter?.cancelDiscovery()
+            onState("${device.name ?: device.address} 연결 중…")
+
+            var lastError: Throwable? = null
+            val candidates = listOf(
+                { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+                { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) }
+            )
+
+            for ((index, factory) in candidates.withIndex()) {
+                try {
+                    val s = factory()
+                    s.connect()
+                    socket = s
+                    output = s.outputStream
+                    onState("연결됨: ${device.name ?: device.address} / SPP${if (index == 0) "" else "(insecure)"}")
+
+                    // Communication check: blink forward LED, then stop.
+                    repeat(3) {
+                        send(AltinoPacket.drive(0, 0, 0, led = 0x01))
+                        delay(60)
+                    }
+                    repeat(3) {
+                        send(AltinoPacket.drive(0, 0, 0, led = 0x00))
+                        delay(60)
+                    }
+                    return@launch
+                } catch (t: Throwable) {
+                    lastError = t
+                    closeInternal()
+                    delay(150)
                 }
-            } catch (t: Throwable) {
-                closeInternal()
-                onState("연결 실패: ${t.message ?: t.javaClass.simpleName}")
             }
+
+            onState("연결 실패: ${lastError?.message ?: "Classic SPP 장치를 선택하세요"}")
         }
     }
 
