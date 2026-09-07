@@ -4,36 +4,227 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:padding="10dp">
 
-    <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1.7" android:background="#111111">
-        <androidx.camera.view.PreviewView android:id="@+id/previewView" android:layout_width="match_parent" android:layout_height="match_parent" app:scaleType="fillCenter" />
-        <TextView android:id="@+id/tvGestureOverlay" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="top|center_horizontal" android:layout_marginTop="16dp" android:background="#CC000000" android:padding="12dp" android:text="손을 보여주세요" android:textColor="#FFFFFF" android:textSize="26sp" android:textStyle="bold" />
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.55"
+        android:background="#111111">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fillCenter" />
+
+        <TextView
+            android:id="@+id/tvGestureOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="14dp"
+            android:background="#CC000000"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:text="손을 보여주세요"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:textStyle="bold" />
     </FrameLayout>
 
-    <ScrollView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="12dp">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ALTINO LITE 손동작 제어" android:textSize="23sp" android:textStyle="bold" />
-            <TextView android:id="@+id/tvBluetoothStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:padding="8dp" android:text="Bluetooth: 연결 안 됨" />
-            <Spinner android:id="@+id/spinnerDevices" android:layout_width="match_parent" android:layout_height="48dp" />
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button android:id="@+id/btnRefresh" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="목록 새로고침" />
-                <Button android:id="@+id/btnConnect" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="연결" />
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ALTINO LITE 손동작 제어"
+                android:textSize="21sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvBluetoothStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:padding="5dp"
+                android:text="Bluetooth: 연결 안 됨"
+                android:textSize="13sp" />
+
+            <Spinner
+                android:id="@+id/spinnerDevices"
+                android:layout_width="match_parent"
+                android:layout_height="38dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:padding="2dp"
+                    android:text="새로고침"
+                    android:textSize="11sp" />
+
+                <Button
+                    android:id="@+id/btnConnect"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:padding="2dp"
+                    android:text="연결"
+                    android:textSize="11sp" />
+
+                <Button
+                    android:id="@+id/btnDisconnect"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:padding="2dp"
+                    android:text="해제"
+                    android:textSize="11sp" />
             </LinearLayout>
-            <Button android:id="@+id/btnDisconnect" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="연결 해제" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="속도" />
-            <SeekBar android:id="@+id/seekSpeed" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="500" android:progress="300" />
-            <TextView android:id="@+id/tvSpeed" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="300" />
-            <TextView android:id="@+id/tvCommand" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:text="현재 명령: 정지" android:textSize="20sp" android:textStyle="bold" />
-            <Switch android:id="@+id/switchHandControl" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="손동작 제어 사용" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="6dp" android:text="✊ 정지\n🖐 전진\n☝ 후진\n✌ 좌회전\n세 손가락 우회전" />
-            <Button android:id="@+id/btnForward" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▲ 전진" />
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button android:id="@+id/btnLeft" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="◀ 좌" />
-                <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="■ 정지" />
-                <Button android:id="@+id/btnRight" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="우 ▶" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="속도"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/seekSpeed"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="500"
+                    android:progress="300" />
+
+                <TextView
+                    android:id="@+id/tvSpeed"
+                    android:layout_width="44dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="300"
+                    android:textSize="13sp" />
             </LinearLayout>
-            <Button android:id="@+id/btnBackward" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▼ 후진" />
+
+            <TextView
+                android:id="@+id/tvCommand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="5dp"
+                android:text="현재 명령: 정지"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Switch
+                android:id="@+id/switchHandControl"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:checked="true"
+                android:text="손동작 제어 사용"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="4dp"
+                android:text="✊ 정지   🖐 전진   ☝ 후진   ✌ 좌회전   3손가락 우회전"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:text="수동 운전"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnForward"
+                android:layout_width="match_parent"
+                android:layout_height="92dp"
+                android:layout_marginHorizontal="18dp"
+                android:layout_marginBottom="6dp"
+                android:text="▲  전진"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="96dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnLeft"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:text="◀\n좌회전"
+                    android:textSize="21sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnStop"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="2dp"
+                    android:layout_weight="1.15"
+                    android:text="■\n정지"
+                    android:textSize="23sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnRight"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:text="▶\n우회전"
+                    android:textSize="21sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnBackward"
+                android:layout_width="match_parent"
+                android:layout_height="92dp"
+                android:layout_marginHorizontal="18dp"
+                android:layout_marginTop="6dp"
+                android:text="▼  후진"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
